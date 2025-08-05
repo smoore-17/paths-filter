@@ -134,6 +134,23 @@ async function getChangedFilesFromGit(base: string, head: string, initialFetchDe
     )
   }
 
+  // Check if this is a tag push and no base was explicitly specified
+  const originalBase = core.getInput('base', {required: false})
+  const originalRef = core.getInput('ref', {required: false})
+  const isTagPush = (git.isTag(head) || git.isTag(github.context.ref)) && !originalBase && !originalRef
+  if (isTagPush) {
+    const tagName = git.isTag(head) ? head : git.getShortName(github.context.ref)
+    core.info(`Tag push detected: ${tagName}`)
+    const previousTag = await git.getPreviousTag(tagName)
+    if (previousTag) {
+      core.info(`Comparing tag ${tagName} against previous tag ${previousTag}`)
+      return await git.getChanges(previousTag, tagName)
+    } else {
+      core.info('No previous tag found - comparing against default branch')
+      base = defaultBranch
+    }
+  }
+
   const isBaseSha = git.isGitSha(base)
   const isBaseSameAsHead = base === head
 

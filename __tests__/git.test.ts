@@ -32,4 +32,20 @@ describe('git utility function tests (those not invoking git)', () => {
     expect(git.isGitSha('This_is_very_long_name_for_a_branch_1111')).toBeFalsy()
     expect(git.isGitSha('master')).toBeFalsy()
   })
+
+  test('isTag(ref) returns true for tag references', () => {
+    expect(git.isTag('refs/tags/v1')).toBeTruthy()
+  })
+
+  test('isTag(ref) returns false for branch references', () => {
+    expect(git.isTag('refs/heads/master')).toBeFalsy()
+    expect(git.isTag('heads/master')).toBeFalsy()
+    expect(git.isTag('master')).toBeFalsy()
+    expect(git.isTag('tags/v1')).toBeFalsy()
+    expect(git.isTag('v1')).toBeFalsy()
+  })
+
+  test('isTag(ref) returns false for commit SHAs', () => {
+    expect(git.isTag('8b399ed1681b9efd6b1e048ca1c5cba47edf3855')).toBeFalsy()
+  })
 })

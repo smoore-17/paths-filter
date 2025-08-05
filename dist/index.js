@@ -204,7 +204,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.isGitSha = exports.getShortName = exports.getCurrentRef = exports.listAllFilesAsAdded = exports.parseGitDiffOutput = exports.getChangesSinceMergeBase = exports.getChangesOnHead = exports.getChanges = exports.getChangesInLastCommit = exports.HEAD = exports.NULL_SHA = void 0;
+exports.getPreviousTag = exports.isTag = exports.isGitSha = exports.getShortName = exports.getCurrentRef = exports.listAllFilesAsAdded = exports.parseGitDiffOutput = exports.getChangesSinceMergeBase = exports.getChangesOnHead = exports.getChanges = exports.getChangesInLastCommit = exports.HEAD = exports.NULL_SHA = void 0;
 const exec_1 = __nccwpck_require__(1514);
 const core = __importStar(__nccwpck_require__(2186));
 const file_1 = __nccwpck_require__(4014);
@@ -394,6 +394,38 @@ function isGitSha(ref) {
     return /^[a-z0-9]{40}$/.test(ref);
 }
 exports.isGitSha = isGitSha;
+function isTag(ref) {
+    return ref.startsWith('refs/tags/');
+}
+exports.isTag = isTag;
+async function getPreviousTag(currentTag) {
+    core.startGroup(`Finding previous tag for ${currentTag}`);
+    try {
+        // Get all tags sorted by version (assuming semantic versioning)
+        const output = (await (0, exec_1.getExecOutput)('git', ['tag', '--sort=-version:refname'])).stdout;
+        const tags = output.split('\n').filter(tag => tag.trim() !== '');
+        // Find the current tag in the list
+        const currentIndex = tags.findIndex(tag => tag === currentTag);
+        if (currentIndex === -1) {
+            core.warning(`Current tag ${currentTag} not found in tag list`);
+            return null;
+        }
+        // Get the previous tag (next in the sorted list)
+        if (currentIndex + 1 < tags.length) {
+            const previousTag = tags[currentIndex + 1];
+            core.info(`Found previous tag: ${previousTag}`);
+            return previousTag;
+        }
+        else {
+            core.info('No previous tag found - this appears to be the first tag');
+            return null;
+        }
+    }
+    finally {
+        core.endGroup();
+    }
+}
+exports.getPreviousTag = getPreviousTag;
 async function hasCommit(ref) {
     return (await (0, exec_1.getExecOutput)('git', ['cat-file', '-e', `${ref}^{commit}`], { ignoreReturnCode: true })).exitCode === 0;
 }
@@ -657,6 +689,23 @@ async function getChangedFilesFromGit(base, head, initialFetchDepth) {
     }
     if (!base) {
         throw new Error("This action requires 'base' input to be configured or 'repository.default_branch' to be set in the event payload");
+    }
+    // Check if this is a tag push and no base was explicitly specified
+    const originalBase = core.getInput('base', { required: false });
+    const originalRef = core.getInput('ref', { required: false });
+    const isTagPush = (git.isTag(head) || git.isTag(github.context.ref)) && !originalBase && !originalRef;
+    if (isTagPush) {
+        const tagName = git.isTag(head) ? head : git.getShortName(github.context.ref);
+        core.info(`Tag push detected: ${tagName}`);
+        const previousTag = await git.getPreviousTag(tagName);
+        if (previousTag) {
+            core.info(`Comparing tag ${tagName} against previous tag ${previousTag}`);
+            return await git.getChanges(previousTag, tagName);
+        }
+        else {
+            core.info('No previous tag found - comparing against default branch');
+            base = defaultBranch;
+        }
     }
     const isBaseSha = git.isGitSha(base);
     const isBaseSameAsHead = base === head;

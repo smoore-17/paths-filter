@@ -198,6 +198,38 @@ export function isGitSha(ref: string): boolean {
   return /^[a-z0-9]{40}$/.test(ref)
 }
 
+export function isTag(ref: string): boolean {
+  return ref.startsWith('refs/tags/')
+}
+
+export async function getPreviousTag(currentTag: string): Promise<string | null> {
+  core.startGroup(`Finding previous tag for ${currentTag}`)
+  try {
+    // Get all tags sorted by version (assuming semantic versioning)
+    const output = (await getExecOutput('git', ['tag', '--sort=-version:refname'])).stdout
+    const tags = output.split('\n').filter(tag => tag.trim() !== '')
+    
+    // Find the current tag in the list
+    const currentIndex = tags.findIndex(tag => tag === currentTag)
+    if (currentIndex === -1) {
+      core.warning(`Current tag ${currentTag} not found in tag list`)
+      return null
+    }
+    
+    // Get the previous tag (next in the sorted list)
+    if (currentIndex + 1 < tags.length) {
+      const previousTag = tags[currentIndex + 1]
+      core.info(`Found previous tag: ${previousTag}`)
+      return previousTag
+    } else {
+      core.info('No previous tag found - this appears to be the first tag')
+      return null
+    }
+  } finally {
+    core.endGroup()
+  }
+}
+
 async function hasCommit(ref: string): Promise<boolean> {
   return (await getExecOutput('git', ['cat-file', '-e', `${ref}^{commit}`], {ignoreReturnCode: true})).exitCode === 0
 }
