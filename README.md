@@ -1,4 +1,5 @@
 # Paths Changes Filter
+This repo is a fork of [dorny/paths-filter](https://github.com/dorny/paths-filter) that includes the ability to detect tags natively and compare changes against previous tags.
 
 [GitHub Action](https://github.com/features/actions) that enables conditional execution of workflow steps and jobs, based on the files modified by pull request, on a feature
 branch, or by the recently pushed commits.
@@ -38,6 +39,15 @@ don't allow this because they don't work on a level of individual jobs or steps.
   when `base` input parameter is the same as the branch that triggered the workflow:
     - Changes are detected from the last commit
   - Uses git commands to detect changes - repository must be already [checked out](https://github.com/actions/checkout)
+- **Tag pushes:**
+  - Workflow triggered by **[push](https://docs.github.com/en/actions/reference/events-that-trigger-workflows#push)** event to a tag
+  - When no `base` or `ref` parameters are specified:
+    - Changes are detected against the most recent previous tag (sorted by semantic versioning)
+    - Falls back to default branch comparison if no previous tag exists
+  - When `base` or `ref` parameters are specified:
+    - Uses the specified comparison base (same as other workflows)
+  - Uses git commands to detect changes - repository must be already [checked out](https://github.com/actions/checkout)
+  - Requires `fetch-depth: 0` for full tag history access
 - **Local changes**
   - Workflow triggered by any event when `base` input parameter is set to `HEAD`
   - Changes are detected against the current HEAD
@@ -46,7 +56,7 @@ don't allow this because they don't work on a level of individual jobs or steps.
 ## Example
 
 ```yaml
-- uses: dorny/paths-filter@v3
+- uses: smoore-17/paths-filter@v1.0.0
   id: changes
   with:
     filters: |
@@ -78,13 +88,14 @@ For more scenarios see [examples](#examples) section.
 - Configure matrix job to run for each folder with changes using `changes` output
 - Improved listing of matching files with `list-files: shell` and `list-files: escape` options
 - Paths expressions are now evaluated using [picomatch](https://github.com/micromatch/picomatch) library
+- Add automatic tag detection - compares against previous tag when no base/ref specified
 
-For more information, see [CHANGELOG](https://github.com/dorny/paths-filter/blob/master/CHANGELOG.md)
+For more information, see [CHANGELOG](https://github.com/smoore-17/paths-filter/blob/master/CHANGELOG.md)
 
 ## Usage
 
 ```yaml
-- uses: dorny/paths-filter@v3
+- uses: smoore-17/paths-filter@v1.0.0
   with:
     # Defines filters applied to detected changed files.
     # Each filter has a name and a list of rules.
@@ -193,7 +204,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - uses: dorny/paths-filter@v3
+    - uses: smoore-17/paths-filter@v1.0.0
       id: filter
       with:
         filters: |
@@ -237,7 +248,7 @@ jobs:
       frontend: ${{ steps.filter.outputs.frontend }}
     steps:
     # For pull requests it's not necessary to checkout the code
-    - uses: dorny/paths-filter@v3
+    - uses: smoore-17/paths-filter@v1.0.0
       id: filter
       with:
         filters: |
@@ -283,7 +294,7 @@ jobs:
       packages: ${{ steps.filter.outputs.changes }}
     steps:
     # For pull requests it's not necessary to checkout the code
-    - uses: dorny/paths-filter@v3
+    - uses: smoore-17/paths-filter@v1.0.0
       id: filter
       with:
         filters: |
@@ -325,7 +336,7 @@ jobs:
       pull-requests: read
     steps:
     - uses: actions/checkout@v4
-    - uses: dorny/paths-filter@v3
+    - uses: smoore-17/paths-filter@v1.0.0
       id: filter
       with:
         filters: ... # Configure your filters
@@ -350,7 +361,7 @@ jobs:
         # This may save additional git fetch roundtrip if
         # merge-base is found within latest 20 commits
         fetch-depth: 20
-    - uses: dorny/paths-filter@v3
+    - uses: smoore-17/paths-filter@v1.0.0
       id: filter
       with:
         base: develop # Change detection against merge-base with this branch
@@ -374,7 +385,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - uses: dorny/paths-filter@v3
+    - uses: smoore-17/paths-filter@v1.0.0
       id: filter
       with:
         # Use context to get the branch where commits were pushed.
@@ -382,6 +393,32 @@ jobs:
         # you can specify it directly.
         # If it's not configured, the repository default branch is used.
         base: ${{ github.ref }}
+        filters: ... # Configure your filters
+```
+
+</details>
+
+<details>
+  <summary><b>Tag pushes:</b> Detect changes against the previous tag</summary>
+
+```yaml
+on:
+  push:
+    tags: # Push to following tags will trigger the workflow
+      - 'v*'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        # Important: fetch full history for tag comparison
+        fetch-depth: 0
+    - uses: smoore-17/paths-filter@v1.0.0
+      id: filter
+      with:
+        # No base/ref specified - automatically compares against previous tag
+        # Falls back to default branch if no previous tag exists
         filters: ... # Configure your filters
 ```
 
@@ -408,7 +445,7 @@ jobs:
 
       # Filter to detect which files were modified
       # Changes could be, for example, automatically committed
-    - uses: dorny/paths-filter@v3
+    - uses: smoore-17/paths-filter@v1.0.0
       id: filter
       with:
         base: HEAD
@@ -423,12 +460,11 @@ jobs:
   <summary>Define filter rules in own file</summary>
 
 ```yaml
-- uses: dorny/paths-filter@v3
+- uses: smoore-17/paths-filter@v1.0.0
       id: filter
       with:
         # Path to file where filters are defined
         filters: .github/filters.yaml
-```
 
 </details>
 
@@ -436,7 +472,7 @@ jobs:
   <summary>Use YAML anchors to reuse path expression(s) inside another rule</summary>
 
 ```yaml
-- uses: dorny/paths-filter@v3
+- uses: smoore-17/paths-filter@v1.0.0
       id: filter
       with:
         # &shared is YAML anchor,
@@ -449,7 +485,6 @@ jobs:
           src:
             - *shared
             - src/**
-```
 
 </details>
 
@@ -457,7 +492,7 @@ jobs:
   <summary>Consider if file was added, modified or deleted</summary>
 
 ```yaml
-- uses: dorny/paths-filter@v3
+- uses: smoore-17/paths-filter@v1.0.0
       id: filter
       with:
         # Changed file can be 'added', 'modified', or 'deleted'.
@@ -475,7 +510,6 @@ jobs:
             - added|deleted|modified: '**'
           addedOrModifiedAnchors:
             - added|modified: *shared
-```
 
 </details>
 
@@ -483,7 +517,7 @@ jobs:
   <summary>Detect changes in folder only for some file extensions</summary>
 
 ```yaml
-- uses: dorny/paths-filter@v3
+- uses: smoore-17/paths-filter@v1.0.0
       id: filter
       with:
         # This makes it so that all the patterns have to match a file for it to be
@@ -501,7 +535,6 @@ jobs:
             - 'pkg/a/b/c/**'
             - '!**/*.jpeg'
             - '!**/*.md'
-```
 
 </details>
 
@@ -511,7 +544,7 @@ jobs:
   <summary>Passing list of modified files as command line args in Linux shell</summary>
 
 ```yaml
-- uses: dorny/paths-filter@v3
+- uses: smoore-17/paths-filter@v1.0.0
   id: filter
   with:
     # Enable listing of files matching each filter.
@@ -529,7 +562,6 @@ jobs:
 - name: Lint Markdown
   if: ${{ steps.filter.outputs.markdown == 'true' }}
   run: npx textlint ${{ steps.filter.outputs.markdown_files }}
-```
 
 </details>
 
@@ -537,7 +569,7 @@ jobs:
   <summary>Passing list of modified files as JSON array to another action</summary>
 
 ```yaml
-- uses: dorny/paths-filter@v3
+- uses: smoore-17/paths-filter@v1.0.0
   id: filter
   with:
     # Enable listing of files matching each filter.
@@ -554,7 +586,6 @@ jobs:
   uses: johndoe/some-action@v1
   with:
     files: ${{ steps.filter.outputs.changed_files }}
-```
 
 </details>
 
@@ -564,4 +595,4 @@ jobs:
 
 ## License
 
-The scripts and documentation in this project are released under the [MIT License](https://github.com/dorny/paths-filter/blob/master/LICENSE)
+The scripts and documentation in this project are released under the [MIT License](https://github.com/smoore-17/paths-filter/blob/master/LICENSE)
